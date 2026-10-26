@@ -32,7 +32,7 @@ var DEFAULT_MUSIC='https://youtu.be/kbAxrwfLSsE https://youtu.be/WWkF5KUoTA4 htt
   var TRACKS=DEFAULT_MUSIC.match(/[A-Za-z0-9_-]{11}(?=[^A-Za-z0-9_-]|$)/g)||[];
   TRACKS=(DEFAULT_MUSIC.match(/youtu\.be\/([A-Za-z0-9_-]{11})/g)||[]).map(function(x){return x.slice(-11)});
   var ST=window.__STATIONS;
-  if(ST&&TRACKS.length&&!ST.__yt){ST.__yt=1;for(var i=TRACKS.length-1;i>=0;i--)ST.unshift({n:'🎵 Song '+(i+1),yt:TRACKS[i]})}
+  /* YouTube songs now live inside the one Music Mix station (see below) */
   var frame=null,curId=null,wantOn=null,lastDrive=null,lastWalk=null;
   function walk(){return LS('hl-walk')==='1'}
   function off(){return LS('hl-musicoff')==='1'}
@@ -57,24 +57,40 @@ var DEFAULT_MUSIC='https://youtu.be/kbAxrwfLSsE https://youtu.be/WWkF5KUoTA4 htt
     'Auracle':{a:'shallipopi',alb:'album/auracle-2126337',t:'ant-7909898 laho-5480467 turner-6869359 eyo-0504221 gbefun-fine-shit-6273348 him-5570952 stay-6811021 chokehold-bro-code-3120493 opeuhh-9054013 like-that-bomboclatt-9255419 pull-up-6550878 aura-9939615 afa-relax-oo-7567812 caution-hold-something-5348777 rockstar-0318870 searching-4-me-5638348 na-so-1106855 ballingo-0663580 loaded-4825229 igho-3981245 laho-ii-5609762 laho-iii-8478304'},
     'Hometown Heroes':{pl:1,a:'johneniibukun',alb:'playlist/hometown-heroes-abuja',t:'iampriesst/akonuche-7448109 psychoyp/lets-go eeskaylvl/lamb-truck southsideshakur/mad 2Soft/woman odumodublvck/202pm-in-london-freestyle-5141605 eslafirstklaz/soyaiya-7053833 reeplay-007/akpor-feat-odumodublvck-magnito-portable mimieyoo/mimieyoo-pain-me-pass psychoyp/different-pattern'}
   };
-  var AMN=Object.keys(AM),lastAlb='',amFrame=null,amBox=null,amKey='';
+  var AMN=Object.keys(AM),lastGrp='',amFrame=null,amBox=null,amKey='';
   function pick(a){return a[Math.floor(Math.random()*a.length)]}
-  function songUrl(name){var o=AM[name],t=pick(o.t.split(' '));return o.pl?'song/'+t:'song/'+o.a+'/'+t}
-  function amSrc(st){
-    if(st.mix){var n=pick(AMN.filter(function(x){return x!==lastAlb}));lastAlb=n;st.cur=n;return 'https://audiomack.com/embed/'+songUrl(n)+'?background=1&color=ffffff'}
-    var o=AM[st.am];return 'https://audiomack.com/embed/'+(o.pl?o.alb:o.a+'/'+o.alb)+'?background=1&color=ffffff'}
-  function amShow(st){
-    if(!amBox){amBox=document.createElement('div');amBox.style.cssText='position:fixed;left:8px;bottom:8px;width:230px;z-index:30;background:#000c;border-radius:12px;padding:4px;display:none';
-      amFrame=document.createElement('iframe');amFrame.allow='autoplay; encrypted-media';amFrame.style.cssText='width:100%;height:110px;border:0;border-radius:10px;display:block';
-      var b=document.createElement('button');b.textContent='⏭ Next song';b.style.cssText='margin-top:4px;width:100%;padding:8px;border:0;border-radius:8px;background:#ffd23f;font-weight:700';
-      b.onclick=function(){var s=ST[window.__audio.station];if(s&&s.am){amKey='';if(s.mix)amFrame.src=amSrc(s);else{var n=s.am;amFrame.src='https://audiomack.com/embed/'+songUrl(n)+'?background=1&color=ffffff'}}};
-      amBox.appendChild(amFrame);amBox.appendChild(b);document.body.appendChild(amBox)}
-    if(amKey!==st.n){amKey=st.n;amFrame.src=amSrc(st)}
-    amBox.style.display='block'}
-  function amHide(){if(amBox&&amBox.style.display!=='none'){amBox.style.display='none';amFrame.src='about:blank';amKey=''}}
-  if(ST&&!ST.__am){ST.__am=1;ST.push({n:'🔀 Audiomack Mix (all albums)',am:'mix',mix:1});AMN.forEach(function(n){ST.push({n:'📀 '+n,am:n})})}
-  setInterval(function(){var A=window.__audio,st=A&&ST&&ST[A.station],drive=!!(window.__player&&window.__player.st!=='foot');
-    if(A&&window.__mode==='play'&&st&&st.am&&(drive||walk())&&!document.hidden&&!off())amShow(st);else amHide()},400);
+  var bags={};
+  function songUrl(name){var o=AM[name];if(!bags[name]||!bags[name].length){var a=o.t.split(' ');for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),x=a[i];a[i]=a[j];a[j]=x}bags[name]=a}var t=bags[name].pop();return o.pl?'song/'+t:'song/'+o.a+'/'+t}
+  function amShown(){return LS('hl-amshow')==='1'}
+  /* ONE radio station that mixes every song: YouTube songs + all Audiomack albums. Each tap on the radio (or the end of a song) jumps to a song from a DIFFERENT source than the last one. */
+  var M={n:'🔀 Music Mix (all songs)',am:1,mixall:1,yt:undefined,amUrl:null,el:0};
+  var queue=[];
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
+  var hist=[],fwd=[];
+  function snap(){return{yt:M.yt,amUrl:M.amUrl,g:lastGrp}}
+  function apply(o){M.yt=o.yt;M.amUrl=o.amUrl;lastGrp=o.g||lastGrp;M.el=0;amKey=''}
+  function roll(){
+    if(M.yt||M.amUrl){hist.push(snap());if(hist.length>30)hist.shift()}
+    if(!queue.length){queue=shuffle(AMN).concat(TRACKS.length?['yt']:[]);if(queue[0]===lastGrp&&queue.length>1)queue.push(queue.shift())}
+    var g=queue.shift();lastGrp=g;M.el=0;
+    if(g==='yt'){var ids=TRACKS.filter(function(x){return x!==M.yt});M.yt=pick(ids.length?ids:TRACKS);M.amUrl=null}
+    else{M.yt=undefined;M.amUrl='https://audiomack.com/embed/'+songUrl(g)+'?background=1&color=ffffff'}
+    amKey=''}
+  function nextSong(){if(fwd.length){hist.push(snap());apply(fwd.pop())}else roll()}
+  function prevSong(){if(!hist.length)return;fwd.push(snap());apply(hist.pop())}
+  roll();
+  if(ST&&!ST.__mx){ST.__mx=1;ST.unshift(M)}
+  function amPlace(){if(!amBox)return;var v=amShown();amBox.style.cssText=v?'position:fixed;left:6px;bottom:6px;width:190px;z-index:30;background:#000c;border-radius:10px;padding:3px':'position:fixed;left:-400px;top:0;width:200px;opacity:.02;pointer-events:none;z-index:-1';amFrame.style.height=v?'90px':'110px'}
+  function amShow(){
+    if(!amBox){amBox=document.createElement('div');amFrame=document.createElement('iframe');amFrame.allow='autoplay; encrypted-media';amFrame.setAttribute('aria-hidden','true');amFrame.style.cssText='width:100%;border:0;border-radius:8px;display:block';amBox.appendChild(amFrame);document.body.appendChild(amBox)}
+    amPlace();if(M.amUrl&&amKey!==M.amUrl){amKey=M.amUrl;amFrame.src=M.amUrl}}
+  function amHide(){if(amBox&&amKey){amFrame.src='about:blank';amKey=''}}
+  /* radio button in the car: on the Mix station it changes the song instead of changing station */
+  if(typeof ACT!=='undefined'&&ACT.station&&!ACT.__am){ACT.__am=1;var oldSt=ACT.station;
+    ACT.station=function(){var A=window.__audio,st=A&&ST&&ST[A.station];if(st&&st.mixall){nextSong();try{A.setRadio(true);toast('🔀 Next song')}catch(e){}return}return oldSt.apply(this,arguments)}}
+  setInterval(function(){var A=window.__audio,st=A&&ST&&ST[A.station],drive=!!(window.__player&&window.__player.st!=='foot'),on=!!(A&&window.__mode==='play'&&st&&st.mixall&&(drive||walk())&&!document.hidden&&!off());
+    if(on){M.el+=.4;if(M.el>205){nextSong()}}
+    if(on&&!M.yt&&M.amUrl)amShow();else amHide()},400);
   document.addEventListener('visibilitychange',function(){if(document.hidden&&frame){cmd('pauseVideo');wantOn=false}});
   addEventListener('pagehide',function(){cmd('pauseVideo');wantOn=false});
 
@@ -133,8 +149,10 @@ var DEFAULT_MUSIC='https://youtu.be/kbAxrwfLSsE https://youtu.be/WWkF5KUoTA4 htt
   setInterval(function(){if(window.__mode==='play'&&!lobbyEl&&Date.now()-lastBeat>30000&&!document.hidden)lobby()},10000);
   function fb(v){LS('hl-fb',String(v));post('/api/ping',{id:id,fb:v}).catch(function(){});var m=document.getElementById('mcard');if(m){var f=m.querySelector('#f_y');if(f&&f.parentNode)f.parentNode.firstChild.textContent='💚 Thanks for your feedback! '}}
   function musicCard(){var c=document.createElement('div');c.id='mcard';c.style.cssText='margin:10px 0;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);font:500 13px system-ui,sans-serif;color:#fff';
-    function draw(){c.innerHTML='🎵 <b>Music</b><div style="opacity:.75;margin:4px 0 8px">Songs play on the car radio — tap 📻 in the car to change station.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="m_w" class="btn">🎧 Music while walking: '+(walk()?'ON':'OFF')+'</button><button id="m_m" class="btn alt">🗺️ Map: '+['Normal','Small','Hidden'][+mapMode()]+'</button><button id="m_o" class="btn alt">'+(off()?'🔊 Turn music on':'🔇 Stop all music')+'</button>'+(!(SHOPCFG&&SHOPCFG.on)?'':'<button id="m_s" class="btn">🛒 Buy cash · Support</button>')+'</div><div style="margin-top:10px">'+(LS('hl-fb')?'💚 Thanks for your feedback!':'Do you like Heirloom? <button id="f_y" class="btn sm">👍 Yes</button> <button id="f_n" class="btn sm alt">👎 No</button>')+' <button id="m_sh" class="btn sm">📤 Share game</button></div>';var ms=c.querySelector('#m_s');if(ms)ms.onclick=shopOverlay;
+    function draw(){c.innerHTML='🎵 <b>Music</b><div style="opacity:.75;margin:4px 0 8px">Songs play on the car radio. Tap 📻 in the car for the next song (it jumps between all your albums).</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="m_w" class="btn">🎧 Music while walking: '+(walk()?'ON':'OFF')+'</button><button id="m_m" class="btn alt">🗺️ Map: '+['Normal','Small','Hidden'][+mapMode()]+'</button><button id="m_o" class="btn alt">'+(off()?'🔊 Turn music on':'🔇 Stop all music')+'</button>'+'<button id="m_st" class="btn alt">📻 Change station</button><button id="m_pl" class="btn alt">👁 Song player: '+(amShown()?'SHOWN':'HIDDEN')+'</button>'+(!(SHOPCFG&&SHOPCFG.on)?'':'<button id="m_s" class="btn">🛒 Buy cash · Support</button>')+'</div><div style="margin-top:10px">'+(LS('hl-fb')?'💚 Thanks for your feedback!':'Do you like Heirloom? <button id="f_y" class="btn sm">👍 Yes</button> <button id="f_n" class="btn sm alt">👎 No</button>')+' <button id="m_sh" class="btn sm">📤 Share game</button></div>';var ms=c.querySelector('#m_s');if(ms)ms.onclick=shopOverlay;
       c.querySelector('#m_w').onclick=function(){LS('hl-walk',walk()?'0':'1');draw()};
+      c.querySelector('#m_st').onclick=function(){var A=window.__audio;if(A&&ST){A.station=(A.station+1)%ST.length;A.setRadio(true);try{toast('📻 '+ST[A.station].n)}catch(e){}}draw()};
+      c.querySelector('#m_pl').onclick=function(){LS('hl-amshow',amShown()?'0':'1');amPlace();draw()};
       c.querySelector('#m_m').onclick=function(){LS('hl-map',String((+mapMode()+1)%3));applyMap();draw()};
       var fy=c.querySelector('#f_y'),fn=c.querySelector('#f_n');if(fy){fy.onclick=function(){fb(1)};fn.onclick=function(){fb(0)}}
       c.querySelector('#m_sh').onclick=function(){var u=location.origin+'/';if(navigator.share)navigator.share({title:'Heirloom',text:'Play Heirloom, a 3D Lagos-style open world game!',url:u}).catch(function(){});else{try{navigator.clipboard.writeText(u);this.textContent='✅ Link copied'}catch(e){}}};
@@ -155,6 +173,31 @@ var DEFAULT_MUSIC='https://youtu.be/kbAxrwfLSsE https://youtu.be/WWkF5KUoTA4 htt
       d.innerHTML='Do you like the game? <button data-v="1" style="font-size:22px;background:none;border:0">👍</button><button data-v="0" style="font-size:22px;background:none;border:0">👎</button><button data-v="x" style="background:none;border:0;color:#fff;font-size:16px">✕</button>';
       document.body.appendChild(d);var t=setTimeout(function(){d.remove()},15000);
       d.onclick=function(e){var v=e.target.getAttribute&&e.target.getAttribute('data-v');if(v===null||v===undefined)return;clearTimeout(t);if(v!=='x')post('/api/ping',{id:id,fb:+v}).catch(function(){});d.innerHTML=v==='x'?'':'Thanks! ❤️';setTimeout(function(){d.remove()},v==='x'?0:1500)}}},1000);
+
+  /* ---- always-visible music button (top of the screen) + one-time hint when music starts ---- */
+  var mbtn=null,hintN=+(LS('hl-mhint')||0),lastDr=false;
+  var mwrap=null,mprev=null,mnext=null;
+  function musicBtn(){
+    if(!mwrap){var st='padding:6px 12px;border-radius:99px;border:1px solid #fff4;background:rgba(0,0,0,.5);color:#fff;font:700 12px system-ui,sans-serif';
+      mwrap=document.createElement('div');mwrap.style.cssText='position:fixed;left:34%;top:calc(6px + env(safe-area-inset-top,0px));z-index:29;display:none;gap:6px;align-items:center';
+      mprev=document.createElement('button');mprev.textContent='⏮';mprev.style.cssText=st;mprev.onclick=function(){prevSong();try{window.__audio.setRadio(true)}catch(e){}};
+      mbtn=document.createElement('button');mbtn.style.cssText=st;mbtn.onclick=function(){LS('hl-musicoff',off()?null:'1');lastDrive=null;tickMusic();musicBtn()};
+      mnext=document.createElement('button');mnext.textContent='⏭';mnext.style.cssText=st;mnext.onclick=function(){nextSong();try{window.__audio.setRadio(true)}catch(e){}};
+      mwrap.appendChild(mprev);mwrap.appendChild(mbtn);mwrap.appendChild(mnext);document.body.appendChild(mwrap)}
+    var t=off()?'🎵 Play music':'⏸ Pause music';if(mbtn.textContent!==t)mbtn.textContent=t;
+    var A=window.__audio,cs=A&&ST&&ST[A.station],mix=!!(cs&&cs.mixall);
+    mprev.style.display=mnext.style.display=mix?'block':'none';
+    mwrap.style.display=(window.__mode==='play')?'flex':'none'}
+  setInterval(function(){musicBtn();var dr=!!(window.__player&&window.__player.st!=='foot');
+    if(window.__mode==='play'&&dr&&!lastDr&&!off()&&hintN<3){hintN++;LS('hl-mhint',String(hintN));try{toast('🎵 Music is playing — tap the button at the top to pause it')}catch(e){}}lastDr=dr},500);
+  /* ---- invite a friend ---- */
+  function inviteFriends(){var u=location.origin+'/',t='Come play Heirloom with me — an open-world city game 🚗🌍';
+    if(navigator.share){navigator.share({title:'Heirloom',text:t,url:u}).catch(function(){})}
+    else{try{navigator.clipboard.writeText(t+' '+u);notice('Link copied! Send it to your friends.',1)}catch(e){notice(u,1)}}}
+  /* ---- "What is inside Heirloom" card on the first screen ---- */
+  function featCard(){var c=document.createElement('div');c.id='feat';c.style.cssText='margin:12px auto 4px;padding:12px;max-width:420px;text-align:left;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);font:500 13px/1.5 system-ui,sans-serif;color:#fff';
+    c.innerHTML='<b style="font-size:14px">✨ What is inside Heirloom</b><div style="margin:6px 0 8px;opacity:.9">🚗 Drive Bugatti, Lamborghini, Ferrari and a flying Tesla<br>🎵 Music plays on the car radio by itself (pause it anytime at the top)<br>💬 Chat with players who are online now<br>👫 Invite your friends to join you<br>💼 Jobs, missions, dating, hospital, hotel, club, flights to 6 cities<br>☁️ Save your progress online with a free account</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="ft_c" class="btn sm">💬 Chat with friends</button><button id="ft_i" class="btn sm alt">📤 Invite friends</button></div>';
+    c.querySelector('#ft_c').onclick=function(e){e.stopPropagation();openLobby()};c.querySelector('#ft_i').onclick=function(e){e.stopPropagation();inviteFriends()};return c}
   var sh=document.getElementById('sheet');
-  if(sh)new MutationObserver(function(){var p=sh.querySelector('.panel');if(!p||p.querySelector('#acct')||p.querySelector('#mcard'))return;var h=p.querySelector('.ph');if(h&&/Pause/.test(h.textContent)){var ac=card();h.insertAdjacentElement('afterend',ac);var mc=musicCard();ac.insertAdjacentElement('afterend',mc);mc.insertAdjacentElement('afterend',fbCard())}}).observe(sh,{childList:true,subtree:true});
+  if(sh)new MutationObserver(function(){var p=sh.querySelector('.panel');if(p&&!p.querySelector('#feat')&&/A living open-world city/.test(p.textContent||'')){var rw=p.querySelector('.row.c');if(rw)rw.insertAdjacentElement('afterend',featCard())}if(!p||p.querySelector('#acct')||p.querySelector('#mcard'))return;var h=p.querySelector('.ph');if(h&&/Pause/.test(h.textContent)){var ac=card();h.insertAdjacentElement('afterend',ac);var mc=musicCard();ac.insertAdjacentElement('afterend',mc);mc.insertAdjacentElement('afterend',fbCard())}}).observe(sh,{childList:true,subtree:true});
 })();
